@@ -1,8 +1,12 @@
-from sqlalchemy import create_engine, text
+import logging
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
-from src.server.core.config import settings
+from server.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 database_url = make_url(settings.DATABASE_URL)
 engine_options = {
@@ -24,6 +28,12 @@ else:
     )
 engine = create_engine(settings.DATABASE_URL, **engine_options)
 
+# SQLite ignores foreign keys / ON DELETE CASCADE unless enabled per connection.
+if database_url.get_backend_name() == "sqlite":
+    @event.listens_for(engine, "connect")
+    def _enable_sqlite_foreign_keys(dbapi_connection, _):
+        dbapi_connection.execute("PRAGMA foreign_keys=ON")
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 class Base(DeclarativeBase):
@@ -37,11 +47,11 @@ def get_db():
         db.close()
 
 
-def HealthCheck():
+def check_db() -> bool:
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         return True
-    except Exception as e:
-        print(f"Database health check failed: {e}")
+    except SQLAlchemyError:
+        logger.exception("Database health check failed")
         return False

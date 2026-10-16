@@ -1,0 +1,2 @@
+for this we need to create user model that will have user id with uuid ,name ,email and password and 
+for notes we would have note id and title description ,and shared by model in share by ther would be by whom we sahre and type of access 
